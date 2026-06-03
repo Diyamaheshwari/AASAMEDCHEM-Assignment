@@ -351,7 +351,17 @@ export default function SellerDashboard() {
         <div className="sidebar-top">
           <div className="logo-group" style={{ marginBottom: '32px' }}>
             <div className="logo-icon">
-              <ShoppingBag className="logo-icon-svg" />
+              <svg className="logo-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '22px', height: '22px', color: 'white' }}>
+                <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                <line x1="12" y1="3" x2="12" y2="9"/>
+                <line x1="12" y1="15" x2="12" y2="21"/>
+                <line x1="3" y1="12" x2="9" y2="12"/>
+                <line x1="15" y1="12" x2="21" y2="12"/>
+                <circle cx="12" cy="3" r="1.5" fill="currentColor"/>
+                <circle cx="12" cy="21" r="1.5" fill="currentColor"/>
+                <circle cx="3" cy="12" r="1.5" fill="currentColor"/>
+                <circle cx="21" cy="12" r="1.5" fill="currentColor"/>
+              </svg>
             </div>
             <div>
               <span className="logo-title" style={{ fontSize: '1.1rem' }}>Aasa<span className="gradient-text font-bold">MedChem</span></span>
@@ -387,6 +397,21 @@ export default function SellerDashboard() {
               <ChevronRight size={14} className="nav-arrow" />
             </button>
           </nav>
+          
+          {/* Graphical System Health Indicator */}
+          <div className="sidebar-health-panel animate-fade-in">
+            <div className="health-status-row">
+              <span className="pulse-dot"></span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>System Node: Active</span>
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+              <span>Precision Math Link</span>
+              <span>98.4%</span>
+            </div>
+            <div className="health-bar-container">
+              <div className="health-bar-fill"></div>
+            </div>
+          </div>
         </div>
 
         <div className="sidebar-bottom">
