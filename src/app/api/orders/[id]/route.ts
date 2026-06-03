@@ -71,7 +71,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
               'UPDATE products SET stock_quantity = $1 WHERE id = $2',
               [restoredStock.toString(), item.product_id]
             );
-            console.log(`Restored stock for '${product.name}': +${baseQty.toString()} (New: ${restoredStock.toString()})`);
+            console.log(`\x1b[35m[INVENTORY]\x1b[0m ♻️ Restored stock for '${product.name}': +${baseQty.toString()} (New: ${restoredStock.toString()})`);
           }
         }
       }
@@ -101,7 +101,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             'UPDATE products SET stock_quantity = $1 WHERE id = $2',
             [newStock.toString(), item.product_id]
           );
-          console.log(`Deducted stock for '${product.name}': -${baseQty.toString()} (New: ${newStock.toString()})`);
+          console.log(`\x1b[35m[INVENTORY]\x1b[0m 📦 Deducted stock for '${product.name}': -${baseQty.toString()} (New: ${newStock.toString()})`);
 
           // Check low stock threshold on re-deduction
           const threshold = product.base_unit === 'items' ? new Decimal(10) : new Decimal(1000);
