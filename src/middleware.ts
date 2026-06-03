@@ -51,8 +51,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/seller', request.url));
   }
 
-  // 4. Seller path -> Block non-sellers
-  if (isSellerPath && session.role !== 'seller') {
+  // 4. Seller path -> Block non-sellers and non-buyers (both use the catalog workspace)
+  if (isSellerPath && session.role !== 'seller' && session.role !== 'buyer') {
     return NextResponse.redirect(new URL('/admin', request.url));
   }
 

@@ -28,7 +28,7 @@ function base64urlDecode(str: string): Uint8Array {
 export interface JWTPayload {
   userId: string;
   email: string;
-  role: 'admin' | 'seller';
+  role: 'admin' | 'seller' | 'buyer';
   name: string;
   exp?: number;
 }

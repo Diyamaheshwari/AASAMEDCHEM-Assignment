@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { 
   ShoppingBag, LogOut, Search, Filter, RefreshCw, 
   Trash2, Send, CheckCircle, Clock, AlertTriangle, 
-  XCircle, Award, BarChart3, Sun, Moon, Database, ChevronRight 
+  XCircle, Award, BarChart3, Sun, Moon, Database, ChevronRight,
+  Bell, AlertCircle
 } from 'lucide-react';
 import { UNIT_DIMENSIONS, UNITS_BY_DIMENSION, calculateUnitPrice, calculateItemPrice, convertToBase, formatCurrency, formatQuantity } from '@/lib/converter';
 import Decimal from 'decimal.js';
@@ -54,7 +55,7 @@ interface Order {
 export default function SellerDashboard() {
   const router = useRouter();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string; role: 'seller' | 'buyer' } | null>(null);
   
   // Products Catalog State
   const [products, setProducts] = useState<Product[]>([]);
@@ -76,6 +77,58 @@ export default function SellerDashboard() {
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState('');
   const [orderError, setOrderError] = useState('');
+
+  // Notifications State
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+        setUnreadCount(data.filter((n: any) => !n.is_read).length);
+      }
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setNotifications(prev =>
+          prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+        );
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      });
+      if (res.ok) {
+        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+        setUnreadCount(0);
+      }
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err);
+    }
+  };
 
   useEffect(() => {
     // Hydrate theme
@@ -101,6 +154,11 @@ export default function SellerDashboard() {
     // Fetch initial data
     fetchProducts();
     fetchOrders();
+    fetchNotifications();
+
+    // Setup polling for notifications
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
   }, [router]);
 
   const toggleTheme = () => {
@@ -345,92 +403,252 @@ export default function SellerDashboard() {
   const stats = getOrderStats();
 
   return (
-    <div className="dashboard-grid">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-top">
-          <div className="logo-group" style={{ marginBottom: '32px' }}>
-            <div className="logo-icon">
-              <svg className="logo-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '22px', height: '22px', color: 'white' }}>
-                <circle cx="12" cy="12" r="3" fill="currentColor"/>
-                <line x1="12" y1="3" x2="12" y2="9"/>
-                <line x1="12" y1="15" x2="12" y2="21"/>
-                <line x1="3" y1="12" x2="9" y2="12"/>
-                <line x1="15" y1="12" x2="21" y2="12"/>
-                <circle cx="12" cy="3" r="1.5" fill="currentColor"/>
-                <circle cx="12" cy="21" r="1.5" fill="currentColor"/>
-                <circle cx="3" cy="12" r="1.5" fill="currentColor"/>
-                <circle cx="21" cy="12" r="1.5" fill="currentColor"/>
-              </svg>
-            </div>
-            <div>
-              <span className="logo-title" style={{ fontSize: '1.1rem' }}>Aasa<span className="gradient-text font-bold">MedChem</span></span>
-              <p className="logo-subtitle" style={{ fontSize: '0.65rem' }}>Seller Workspace</p>
-            </div>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%' }}>
+      {/* Top Navigation Bar */}
+      <header className="glass-panel" style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 24px',
+        borderRadius: '0 0 var(--radius-sm) var(--radius-sm)',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(16px)',
+        marginBottom: '24px'
+      }}>
+        {/* Left: Brand Logo & Title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="logo-icon" style={{ width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px', color: 'white' }}>
+              <circle cx="12" cy="12" r="3" fill="currentColor"/>
+              <line x1="12" y1="3" x2="12" y2="9"/>
+              <line x1="12" y1="15" x2="12" y2="21"/>
+              <line x1="3" y1="12" x2="9" y2="12"/>
+              <line x1="15" y1="12" x2="21" y2="12"/>
+              <circle cx="12" cy="3" r="1.5" fill="currentColor"/>
+              <circle cx="12" cy="21" r="1.5" fill="currentColor"/>
+              <circle cx="3" cy="12" r="1.5" fill="currentColor"/>
+              <circle cx="21" cy="12" r="1.5" fill="currentColor"/>
+            </svg>
           </div>
-
-          <div className="user-profile-panel glass-panel">
-            <div className="avatar-placeholder">
-              <Award size={20} className="avatar-svg" />
-            </div>
-            <div className="user-info">
-              <p className="user-name">{user?.name || 'Seller Agent'}</p>
-              <span className="user-role-badge">Seller Account</span>
-            </div>
-          </div>
-
-          <nav className="sidebar-nav">
-            <button
-              onClick={() => setActiveTab('catalog')}
-              className={`nav-item ${activeTab === 'catalog' ? 'active' : ''}`}
-            >
-              <ShoppingBag size={18} />
-              <span>Product Catalog</span>
-              <ChevronRight size={14} className="nav-arrow" />
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
-            >
-              <Clock size={18} />
-              <span>Quotation History</span>
-              <ChevronRight size={14} className="nav-arrow" />
-            </button>
-          </nav>
-          
-          {/* Graphical System Health Indicator */}
-          <div className="sidebar-health-panel animate-fade-in">
-            <div className="health-status-row">
-              <span className="pulse-dot"></span>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>System Node: Active</span>
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-              <span>Precision Math Link</span>
-              <span>98.4%</span>
-            </div>
-            <div className="health-bar-container">
-              <div className="health-bar-fill"></div>
-            </div>
+          <div>
+            <span className="logo-title" style={{ fontSize: '1rem', display: 'block' }}>Aasa<span className="gradient-text font-bold">MedChem</span></span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+              {user?.role === 'buyer' ? 'Buyer Client Workspace' : 'Seller Workspace'}
+            </span>
           </div>
         </div>
 
-        <div className="sidebar-bottom">
-          <button onClick={toggleTheme} className="theme-toggle-btn w-full" style={{ marginBottom: '12px' }}>
-            {theme === 'light' ? (
-              <>
-                <Moon size={16} /> Dark mode
-              </>
-            ) : (
-              <>
-                <Sun size={16} /> Light mode
-              </>
+        {/* Center: Horizontal Navigation Tabs */}
+        <nav style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button
+            onClick={() => setActiveTab('catalog')}
+            className={`btn btn-secondary ${activeTab === 'catalog' ? 'active' : ''}`}
+            style={{ padding: '8px 14px', fontSize: '0.85rem', gap: '6px' }}
+          >
+            <ShoppingBag size={16} />
+            <span>Product Catalog</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`btn btn-secondary ${activeTab === 'history' ? 'active' : ''}`}
+            style={{ padding: '8px 14px', fontSize: '0.85rem', gap: '6px' }}
+          >
+            <Clock size={16} />
+            <span>Quotation History</span>
+          </button>
+        </nav>
+
+        {/* Right: Controls & Profile */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* User Profile Card */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderRight: '1px solid var(--border)', paddingRight: '14px' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: user?.role === 'buyer' 
+                ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
+                : 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: '0.8rem'
+            }}>
+              {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'US'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name || 'User'}</span>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'capitalize' }}>{user?.role || 'Seller'}</span>
+            </div>
+          </div>
+
+          {/* Notification Bell */}
+          <div style={{ position: 'relative' }}>
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className={`btn btn-secondary ${showNotifications ? 'active' : ''}`}
+              style={{ padding: '8px', minWidth: '36px', position: 'relative', borderRadius: 'var(--radius-sm)' }}
+              title="Notifications"
+            >
+              <Bell size={16} className={unreadCount > 0 ? 'animate-bounce' : ''} />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  background: 'var(--danger)',
+                  color: 'white',
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  width: '15px',
+                  height: '15px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 0 2px var(--bg-surface)'
+                }}>
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notifications Dropdown Overlay */}
+            {showNotifications && (
+              <div className="glass-panel" style={{
+                position: 'absolute',
+                right: 0,
+                top: '42px',
+                width: '360px',
+                maxHeight: '480px',
+                display: 'flex',
+                flexDirection: 'column',
+                zIndex: 9999,
+                boxShadow: 'var(--shadow-lg)',
+                border: '1px solid var(--border)',
+                animation: 'fadeIn 0.2s ease-out'
+              }}>
+                <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(99, 102, 241, 0.02)' }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertCircle size={14} style={{ color: 'var(--primary)' }} /> Alerts & Activity
+                  </span>
+                  {unreadCount > 0 && (
+                    <button 
+                      onClick={handleMarkAllAsRead}
+                      style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                
+                <div style={{ overflowY: 'auto', flex: 1, padding: '6px 0', maxHeight: '380px' }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      No notifications or alerts.
+                    </div>
+                  ) : (
+                    notifications.map((n) => {
+                      const relativeTime = (() => {
+                        const diffMs = Date.now() - new Date(n.created_at).getTime();
+                        const diffMins = Math.floor(diffMs / 60000);
+                        const diffHours = Math.floor(diffMins / 60000);
+                        if (diffMins < 1) return 'Just now';
+                        if (diffMins < 60) return `${diffMins}m ago`;
+                        if (diffHours < 24) return `${diffHours}h ago`;
+                        return new Date(n.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+                      })();
+
+                      const typeColor = (() => {
+                        switch (n.type) {
+                          case 'new_order': return 'var(--success)';
+                          case 'new_user': return 'var(--primary)';
+                          case 'low_stock': return 'var(--warning)';
+                          case 'order_status': return 'var(--secondary)';
+                          default: return 'var(--text-muted)';
+                        }
+                      })();
+
+                      return (
+                        <div 
+                          key={n.id} 
+                          onClick={async () => {
+                            await handleMarkAsRead(n.id);
+                            if (n.link) {
+                              const tabParam = n.link.split('tab=')[1];
+                              if (tabParam) {
+                                setActiveTab(tabParam as any);
+                              }
+                            }
+                            setShowNotifications(false);
+                          }}
+                          style={{
+                            padding: '10px 14px',
+                            borderBottom: '1px solid var(--border)',
+                            display: 'flex',
+                            gap: '10px',
+                            cursor: 'pointer',
+                            background: n.is_read ? 'transparent' : 'rgba(99, 102, 241, 0.03)',
+                            transition: 'background 0.2s',
+                            alignItems: 'flex-start'
+                          }}
+                          className="notification-item"
+                        >
+                          <span style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: typeColor,
+                            marginTop: '5px',
+                            flexShrink: 0
+                          }}></span>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontSize: '0.8rem', fontWeight: n.is_read ? 500 : 700, color: 'var(--text-primary)', marginBottom: '1px' }}>
+                              {n.title}
+                            </p>
+                            <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.3 }}>
+                              {n.message}
+                            </p>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '3px' }}>
+                              {relativeTime}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             )}
+          </div>
+
+          {/* Theme Toggle */}
+          <button 
+            onClick={toggleTheme} 
+            className="btn btn-secondary" 
+            style={{ padding: '8px', minWidth: '36px', borderRadius: 'var(--radius-sm)' }}
+            title="Toggle theme"
+          >
+            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
           </button>
-          <button onClick={handleLogout} className="btn btn-secondary w-full" style={{ gap: '10px' }}>
-            <LogOut size={16} /> Sign Out
+
+          {/* Logout */}
+          <button 
+            onClick={handleLogout} 
+            className="btn btn-secondary" 
+            style={{ padding: '8px 12px', fontSize: '0.8rem', gap: '6px', color: 'var(--danger)', borderColor: 'var(--danger-glow)' }}
+          >
+            <LogOut size={14} />
+            <span>Sign Out</span>
           </button>
         </div>
-      </aside>
+      </header>
 
       {/* Main Content Area */}
       <main className="main-content">

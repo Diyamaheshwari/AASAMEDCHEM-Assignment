@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'admin' | 'seller'>('seller');
+  const [role, setRole] = useState<'admin' | 'seller' | 'buyer'>('buyer');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   
   const [loading, setLoading] = useState(false);
@@ -68,14 +68,17 @@ export default function LoginPage() {
     }
   };
 
-  const autofillCredentials = (userRole: 'admin' | 'seller') => {
+  const autofillCredentials = (userRole: 'admin' | 'seller' | 'buyer') => {
     setIsLogin(true);
     if (userRole === 'admin') {
       setEmail('admin@aasamedchem.com');
       setPassword('admin123');
-    } else {
+    } else if (userRole === 'seller') {
       setEmail('seller@aasamedchem.com');
       setPassword('seller123');
+    } else {
+      setEmail('buyer@aasamedchem.com');
+      setPassword('buyer123');
     }
   };
 
@@ -159,27 +162,7 @@ export default function LoginPage() {
                 />
               </div>
 
-              {!isLogin && (
-                <div className="form-group">
-                  <label className="form-label">System Role</label>
-                  <div className="role-selector">
-                    <button
-                      type="button"
-                      onClick={() => setRole('seller')}
-                      className={`role-btn ${role === 'seller' ? 'active' : ''}`}
-                    >
-                      Seller / User
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRole('admin')}
-                      className={`role-btn ${role === 'admin' ? 'active' : ''}`}
-                    >
-                      Administrator
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Public signup is restricted to buyer role, so no selector is shown */}
 
               <button
                 type="submit"
@@ -231,10 +214,17 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="demo-item" onClick={() => autofillCredentials('seller')}>
-              <div className="demo-role seller-badge">Seller / User</div>
+              <div className="demo-role seller-badge">Seller</div>
               <div className="demo-details">
                 <p>seller@aasamedchem.com</p>
                 <span>Password: <strong>seller123</strong></span>
+              </div>
+            </div>
+            <div className="demo-item" onClick={() => autofillCredentials('buyer')}>
+              <div className="demo-role buyer-badge" style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}>Buyer</div>
+              <div className="demo-details">
+                <p>buyer@aasamedchem.com</p>
+                <span>Password: <strong>buyer123</strong></span>
               </div>
             </div>
           </div>

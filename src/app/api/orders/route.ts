@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import pool, { query } from '@/lib/db';
 import { verifyJWT } from '@/lib/auth';
+import { createNotification, notifyAllAdmins, notifyAllStaff } from '@/lib/notifications';
 import { convertToBase, calculateUnitPrice, calculateItemPrice, UNIT_DIMENSIONS } from '@/lib/converter';
 import Decimal from 'decimal.js';
 
@@ -80,8 +81,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (session.role !== 'seller') {
-      return NextResponse.json({ error: 'Forbidden: Only sellers can place orders' }, { status: 403 });
+    if (session.role !== 'seller' && session.role !== 'buyer') {
+      return NextResponse.json({ error: 'Forbidden: Only sellers and buyers can place orders' }, { status: 403 });
     }
 
     const { items } = await request.json(); // Array of { productId, orderedQuantity, orderedUnit }
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
 
       let orderTotalPrice = new Decimal(0);
       const itemsToInsert: any[] = [];
+      const lowStockAlerts: any[] = [];
 
       for (const item of items) {
         const { productId, orderedQuantity, orderedUnit } = item;
@@ -138,6 +140,17 @@ export async function POST(request: Request) {
         // Deduct stock
         const newStock = currentStock.minus(baseQty);
         await client.query('UPDATE products SET stock_quantity = $1 WHERE id = $2', [newStock.toString(), productId]);
+
+        // Check low stock threshold
+        const threshold = product.base_unit === 'items' ? new Decimal(10) : new Decimal(1000);
+        if (newStock.lessThan(threshold)) {
+          lowStockAlerts.push({
+            name: product.name,
+            sku: product.sku,
+            unit: product.base_unit,
+            stock: newStock.toString(),
+          });
+        }
 
         // Price calculations
         const basePrice = new Decimal(product.base_price);
@@ -185,6 +198,31 @@ export async function POST(request: Request) {
 
       await client.query('COMMIT');
       client.release();
+
+      // Trigger notifications asynchronously
+      Promise.all([
+        notifyAllAdmins({
+          title: 'New Quotation Placed',
+          message: `Quotation #${orderId.substring(0, 8)}... placed by ${session.name} (${session.email}) of total ₹${orderTotalPrice.toFixed(2)}.`,
+          type: 'new_order',
+          link: '/admin?tab=orders'
+        }),
+        createNotification({
+          userId: session.userId,
+          title: 'Quotation Placed Successfully',
+          message: `Your quotation #${orderId.substring(0, 8)}... of ₹${orderTotalPrice.toFixed(2)} has been submitted and is pending review.`,
+          type: 'order_status',
+          link: '/seller?tab=history'
+        }),
+        ...lowStockAlerts.map(alert =>
+          notifyAllStaff({
+            title: `Low Stock Alert: ${alert.name}`,
+            message: `Stock level for ${alert.name} (${alert.sku}) is critically low: ${alert.stock} ${alert.unit} remaining.`,
+            type: 'low_stock',
+            link: '/admin?tab=products'
+          })
+        )
+      ]).catch(err => console.error('Notification trigger error:', err));
 
       return NextResponse.json({ message: 'Order placed successfully', orderId }, { status: 201 });
     } catch (txError: any) {

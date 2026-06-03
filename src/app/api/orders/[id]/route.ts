@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import pool, { query } from '@/lib/db';
 import { verifyJWT } from '@/lib/auth';
+import { createNotification, notifyAllStaff } from '@/lib/notifications';
 import Decimal from 'decimal.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_123_abc_xyz_aasa_medchem';
@@ -82,7 +83,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
         for (const item of items) {
           // Lock product row and check stock
-          const prodRes = await client.query('SELECT stock_quantity, name FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
+          const prodRes = await client.query('SELECT stock_quantity, name, sku, base_unit FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
           if (prodRes.rowCount === 0) {
             throw new Error(`Product not found during stock deduction.`);
           }
@@ -101,6 +102,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             [newStock.toString(), item.product_id]
           );
           console.log(`Deducted stock for '${product.name}': -${baseQty.toString()} (New: ${newStock.toString()})`);
+
+          // Check low stock threshold on re-deduction
+          const threshold = product.base_unit === 'items' ? new Decimal(10) : new Decimal(1000);
+          if (newStock.lessThan(threshold)) {
+            notifyAllStaff({
+              title: `Low Stock Alert: ${product.name}`,
+              message: `Stock level for ${product.name} (${product.sku}) is critically low: ${newStock.toString()} ${product.base_unit} remaining.`,
+              type: 'low_stock',
+              link: '/admin?tab=products'
+            }).catch(err => console.error('Low stock notification error:', err));
+          }
         }
       }
 
@@ -115,6 +127,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       await client.query('COMMIT');
       client.release();
+
+      // Trigger notification for the user who placed the order
+      const statusTextMap: Record<string, string> = {
+        approved: 'Approved',
+        rejected: 'Rejected',
+        completed: 'Completed',
+      };
+      
+      const statusLabel = statusTextMap[status];
+      if (statusLabel) {
+        createNotification({
+          userId: order.user_id,
+          title: `Quotation ${statusLabel}`,
+          message: `Your quotation #${id.substring(0, 8)}... of total ₹${parseFloat(order.total_price).toFixed(2)} has been ${status.toLowerCase()} by the Admin.`,
+          type: 'order_status',
+          link: '/seller?tab=history'
+        }).catch(err => console.error('Notification error on status change:', err));
+      }
 
       return NextResponse.json(updateRes.rows[0]);
     } catch (txError: any) {

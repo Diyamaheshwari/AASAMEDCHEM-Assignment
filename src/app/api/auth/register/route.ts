@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { hashPassword, signJWT, verifyJWT } from '@/lib/auth';
+import { notifyAllAdmins } from '@/lib/notifications';
 import { query } from '@/lib/db';
-import { hashPassword, signJWT } from '@/lib/auth';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_123_abc_xyz_aasa_medchem';
+
+async function getSession() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('session_token')?.value;
+  if (!token) return null;
+  return verifyJWT(token, JWT_SECRET);
+}
 
 export async function POST(request: Request) {
   try {
@@ -15,11 +24,23 @@ export async function POST(request: Request) {
       );
     }
 
-    if (role !== 'admin' && role !== 'seller') {
+    const validRoles = ['admin', 'seller', 'buyer'];
+    if (!validRoles.includes(role)) {
       return NextResponse.json(
-        { error: "Role must be either 'admin' or 'seller'" },
+        { error: "Role must be 'admin', 'seller', or 'buyer'" },
         { status: 400 }
       );
+    }
+
+    // Role protection: Only Admins can create Admins and Sellers
+    if (role === 'admin' || role === 'seller') {
+      const session = await getSession();
+      if (!session || session.role !== 'admin') {
+        return NextResponse.json(
+          { error: 'Forbidden: Only administrators can create sellers or administrators' },
+          { status: 403 }
+        );
+      }
     }
 
     // Check if email already exists
@@ -44,16 +65,6 @@ export async function POST(request: Request) {
 
     const newUser = insertRes.rows[0];
 
-    // Sign JWT
-    const tokenPayload = {
-      userId: newUser.id,
-      email: newUser.email,
-      role: newUser.role,
-      name: newUser.name,
-    };
-    
-    const token = await signJWT(tokenPayload, JWT_SECRET);
-
     const response = NextResponse.json(
       {
         message: 'User registered successfully',
@@ -62,16 +73,37 @@ export async function POST(request: Request) {
       { status: 201 }
     );
 
-    // Set secure cookie
-    response.cookies.set({
-      name: 'session_token',
-      value: token,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-    });
+    // Sign session token only for new self-registered Buyers
+    // If Admin created the account, do not overwrite the Admin's session token!
+    if (role === 'buyer') {
+      const tokenPayload = {
+        userId: newUser.id,
+        email: newUser.email,
+        role: newUser.role,
+        name: newUser.name,
+      };
+      
+      const token = await signJWT(tokenPayload, JWT_SECRET);
+
+      // Set secure cookie for Buyer session
+      response.cookies.set({
+        name: 'session_token',
+        value: token,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+      });
+      
+      // Notify all admins of the new buyer registration
+      await notifyAllAdmins({
+        title: 'New Client Registered',
+        message: `Client ${newUser.name} (${newUser.email}) has created a buyer account.`,
+        type: 'new_user',
+        link: '/admin?tab=users'
+      });
+    }
 
     return response;
   } catch (error: any) {
