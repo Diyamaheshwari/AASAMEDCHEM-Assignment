@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  ShoppingBag, LogOut, Search, Filter, RefreshCw, 
+  ShoppingBag, ShoppingCart, LogOut, Search, Filter, RefreshCw, 
   Trash2, Send, CheckCircle, Clock, AlertTriangle, 
-  XCircle, Award, BarChart3, Sun, Moon, Database, ChevronRight,
+  X, XCircle, Award, BarChart3, Sun, Moon, Database, ChevronRight,
   Bell, AlertCircle
 } from 'lucide-react';
 import { UNIT_DIMENSIONS, UNITS_BY_DIMENSION, calculateUnitPrice, calculateItemPrice, convertToBase, formatCurrency, formatQuantity } from '@/lib/converter';
@@ -50,6 +50,8 @@ interface Order {
   total_price: string;
   created_at: string;
   items: OrderItem[];
+  user_name?: string;
+  user_email?: string;
 }
 
 export default function SellerDashboard() {
@@ -71,7 +73,7 @@ export default function SellerDashboard() {
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [activeTab, setActiveTab] = useState<'catalog' | 'history'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'history' | 'incoming'>('catalog');
 
   // Transaction States
   const [submittingOrder, setSubmittingOrder] = useState(false);
@@ -82,6 +84,7 @@ export default function SellerDashboard() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedAuditOrder, setSelectedAuditOrder] = useState<any | null>(null);
 
   const fetchNotifications = async () => {
     try {
@@ -373,6 +376,31 @@ export default function SellerDashboard() {
     }
   };
 
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: 'pending' | 'approved' | 'rejected' | 'completed') => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update order status');
+      }
+
+      fetchProducts();
+      fetchOrders();
+
+      if (selectedAuditOrder && selectedAuditOrder.id === orderId) {
+        setSelectedAuditOrder({ ...selectedAuditOrder, status: newStatus });
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   // Filtering Products
   const filteredProducts = products.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
@@ -417,7 +445,8 @@ export default function SellerDashboard() {
         borderBottom: '1px solid var(--border)',
         background: 'var(--glass-bg)',
         backdropFilter: 'blur(16px)',
-        marginBottom: '24px'
+        marginBottom: '24px',
+        overflow: 'visible'
       }}>
         {/* Left: Brand Logo & Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -452,14 +481,25 @@ export default function SellerDashboard() {
             <ShoppingBag size={16} />
             <span>Product Catalog</span>
           </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`btn btn-secondary ${activeTab === 'history' ? 'active' : ''}`}
-            style={{ padding: '8px 14px', fontSize: '0.85rem', gap: '6px' }}
-          >
-            <Clock size={16} />
-            <span>Quotation History</span>
-          </button>
+          {user?.role === 'buyer' ? (
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`btn btn-secondary ${activeTab === 'history' ? 'active' : ''}`}
+              style={{ padding: '8px 14px', fontSize: '0.85rem', gap: '6px' }}
+            >
+              <Clock size={16} />
+              <span>Quotation History</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setActiveTab('incoming')}
+              className={`btn btn-secondary ${activeTab === 'incoming' ? 'active' : ''}`}
+              style={{ padding: '8px 14px', fontSize: '0.85rem', gap: '6px' }}
+            >
+              <ShoppingCart size={16} />
+              <span>Incoming Orders</span>
+            </button>
+          )}
         </nav>
 
         {/* Right: Controls & Profile */}
@@ -678,9 +718,9 @@ export default function SellerDashboard() {
           </div>
         </section>
 
-        {activeTab === 'catalog' ? (
+        {activeTab === 'catalog' && (
           /* Tab 1: Catalog & Checkout Order Flow */
-          <div className="workspace-layout">
+          <div className="workspace-layout" style={{ gridTemplateColumns: user?.role === 'buyer' ? '1fr 340px' : '1fr' }}>
             <div className="workspace-main">
               {/* Filter controls */}
               <div className="glass-panel search-filter-bar" style={{ padding: '16px 24px', marginBottom: '24px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -791,14 +831,16 @@ export default function SellerDashboard() {
                             </div>
                           </div>
 
-                          <button
-                            onClick={() => addToCart(p)}
-                            disabled={!calc.isValid || new Decimal(p.stock_quantity).lessThan(new Decimal(calc.baseQty))}
-                            className="btn btn-primary"
-                            style={{ width: '100%', marginTop: '16px' }}
-                          >
-                            Add to Cart
-                          </button>
+                          {user?.role === 'buyer' && (
+                            <button
+                              onClick={() => addToCart(p)}
+                              disabled={!calc.isValid || new Decimal(p.stock_quantity).lessThan(new Decimal(calc.baseQty))}
+                              className="btn btn-primary"
+                              style={{ width: '100%', marginTop: '16px' }}
+                            >
+                              Add to Cart
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -807,80 +849,84 @@ export default function SellerDashboard() {
               </div>
             </div>
 
-            {/* Cart Drawer */}
-            <aside className="workspace-aside">
-              <div className="glass-panel cart-panel animate-fade-in">
-                <div className="cart-header">
-                  <ShoppingBag size={20} />
-                  <h3>Quotation Cart</h3>
-                  {cart.length > 0 && (
-                    <button onClick={clearCart} className="cart-clear-btn" aria-label="Clear cart">
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
+            {/* Cart Drawer (Only visible to Buyers) */}
+            {user?.role === 'buyer' && (
+              <aside className="workspace-aside">
+                <div className="glass-panel cart-panel animate-fade-in">
+                  <div className="cart-header">
+                    <ShoppingBag size={20} />
+                    <h3>Quotation Cart</h3>
+                    {cart.length > 0 && (
+                      <button onClick={clearCart} className="cart-clear-btn" aria-label="Clear cart">
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
 
-                <div className="cart-items-list">
-                  {cart.length === 0 ? (
-                    <div className="cart-empty-state">
-                      <ShoppingBag size={48} style={{ color: 'var(--text-muted)', marginBottom: '16px' }} />
-                      <p>Your quotation is empty</p>
-                      <span>Add chemicals from the catalog to build a quotation request.</span>
-                    </div>
-                  ) : (
-                    cart.map((item) => (
-                      <div key={item.product.id} className="cart-item">
-                        <div className="cart-item-details">
-                          <p className="cart-item-name">{item.product.name}</p>
-                          <span className="cart-item-sku">{item.product.sku}</span>
-                          <div className="cart-item-conversions">
-                            <span>Ordered: <strong>{item.quantity} {item.unit}</strong></span>
-                            <span className="conversion-arrow">→</span>
-                            <span>Stored: {formatQuantity(item.baseQuantity)} {item.product.base_unit}</span>
+                  <div className="cart-items-list">
+                    {cart.length === 0 ? (
+                      <div className="cart-empty-state">
+                        <ShoppingBag size={48} style={{ color: 'var(--text-muted)', marginBottom: '16px' }} />
+                        <p>Your quotation is empty</p>
+                        <span>Add chemicals from the catalog to build a quotation request.</span>
+                      </div>
+                    ) : (
+                      cart.map((item) => (
+                        <div key={item.product.id} className="cart-item">
+                          <div className="cart-item-details">
+                            <p className="cart-item-name">{item.product.name}</p>
+                            <span className="cart-item-sku">{item.product.sku}</span>
+                            <div className="cart-item-conversions">
+                              <span>Ordered: <strong>{item.quantity} {item.unit}</strong></span>
+                              <span className="conversion-arrow">→</span>
+                              <span>Stored: {formatQuantity(item.baseQuantity)} {item.product.base_unit}</span>
+                            </div>
+                          </div>
+                          <div className="cart-item-actions">
+                            <button onClick={() => removeFromCart(item.product.id)} className="cart-item-delete">
+                              <Trash2 size={14} />
+                            </button>
+                            <span className="cart-item-price">₹{formatCurrency(item.totalPrice)}</span>
                           </div>
                         </div>
-                        <div className="cart-item-actions">
-                          <button onClick={() => removeFromCart(item.product.id)} className="cart-item-delete">
-                            <Trash2 size={14} />
-                          </button>
-                          <span className="cart-item-price">₹{formatCurrency(item.totalPrice)}</span>
-                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {cart.length > 0 && (
+                    <div className="cart-footer">
+                      {orderError && <div className="alert-message alert-error" style={{ marginBottom: '12px' }}>{orderError}</div>}
+                      {orderSuccess && <div className="alert-message alert-success" style={{ marginBottom: '12px' }}>{orderSuccess}</div>}
+
+                      <div className="cart-total-line">
+                        <span>Grand Total (INR):</span>
+                        <span className="cart-total-value">₹{formatCurrency(getCartTotal())}</span>
                       </div>
-                    ))
+
+                      <button
+                        onClick={submitQuotation}
+                        disabled={submittingOrder}
+                        className="btn btn-primary w-full"
+                        style={{ gap: '10px', height: '46px' }}
+                      >
+                        {submittingOrder ? (
+                          <div className="spinner" />
+                        ) : (
+                          <>
+                            <Send size={16} /> Place Quotation Order
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
-
-                {cart.length > 0 && (
-                  <div className="cart-footer">
-                    {orderError && <div className="alert-message alert-error" style={{ marginBottom: '12px' }}>{orderError}</div>}
-                    {orderSuccess && <div className="alert-message alert-success" style={{ marginBottom: '12px' }}>{orderSuccess}</div>}
-
-                    <div className="cart-total-line">
-                      <span>Grand Total (INR):</span>
-                      <span className="cart-total-value">₹{formatCurrency(getCartTotal())}</span>
-                    </div>
-
-                    <button
-                      onClick={submitQuotation}
-                      disabled={submittingOrder}
-                      className="btn btn-primary w-full"
-                      style={{ gap: '10px', height: '46px' }}
-                    >
-                      {submittingOrder ? (
-                        <div className="spinner" />
-                      ) : (
-                        <>
-                          <Send size={16} /> Place Quotation Order
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </aside>
+              </aside>
+            )}
           </div>
-        ) : (
-          /* Tab 2: Orders History Flow */
+        )}
+
+        {activeTab === 'history' && user?.role === 'buyer' && (
+          /* Tab 2: Orders History Flow - Buyers only */
           <div className="glass-panel" style={{ padding: '30px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <div>
@@ -974,6 +1020,243 @@ export default function SellerDashboard() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'incoming' && user?.role === 'seller' && (
+          /* Tab 3: Incoming Orders Verification Flow - Sellers only */
+          <div className="glass-panel" style={{ padding: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div>
+                <h2>Incoming Quotation Requests</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Verify mathematical conversions and approve/deliver orders containing your products.</p>
+              </div>
+              <button onClick={fetchOrders} className="btn btn-secondary" style={{ gap: '8px' }}>
+                <RefreshCw size={16} /> Sync Orders
+              </button>
+            </div>
+
+            {loadingOrders ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <div className="spinner" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--primary)', margin: '0 auto 16px auto', width: '32px', height: '32px' }} />
+                <p style={{ color: 'var(--text-secondary)' }}>Loading incoming orders...</p>
+              </div>
+            ) : orders.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 40px' }}>
+                <ShoppingBag size={48} style={{ color: 'var(--text-muted)', marginBottom: '16px' }} />
+                <h3>No incoming requests</h3>
+                <p style={{ color: 'var(--text-secondary)' }}>Orders requiring your approval will appear here.</p>
+              </div>
+            ) : (
+              <div className="orders-timeline">
+                {orders.map((order) => {
+                  const dateStr = new Date(order.created_at).toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+
+                  return (
+                    <div key={order.id} className="order-history-card glass-panel" style={{ marginBottom: '20px', border: '1px solid var(--border)' }}>
+                      <div className="order-history-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface-hover)' }}>
+                        <div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ORDER ID | BUYER: <strong>{order.user_name}</strong></span>
+                          <p style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', margin: '2px 0' }}>{order.id}</p>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Submitted on {dateStr}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>ORDER VALUE</span>
+                            <strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>₹{formatCurrency(order.total_price)}</strong>
+                          </div>
+                          <span className={`badge badge-${order.status}`}>{order.status}</span>
+                        </div>
+                      </div>
+
+                      {/* Items and verification actions */}
+                      <div style={{ padding: '0 20px 20px 20px' }}>
+                        <div className="table-container" style={{ marginTop: 0 }}>
+                          <table className="custom-table">
+                            <thead>
+                              <tr>
+                                <th>Product Details</th>
+                                <th>Quantity Requested</th>
+                                <th>Conversion Details</th>
+                                <th>Unit Price</th>
+                                <th style={{ textAlign: 'right' }}>Total Price</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {order.items.map((item) => (
+                                <tr key={item.id}>
+                                  <td>
+                                    <strong>{item.product_name}</strong>
+                                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.product_sku}</span>
+                                  </td>
+                                  <td>{formatQuantity(item.ordered_quantity)} {item.ordered_unit}</td>
+                                  <td>{formatQuantity(item.base_quantity)} {item.product_base_unit}</td>
+                                  <td>₹{formatCurrency(item.unit_price)} per {item.ordered_unit}</td>
+                                  <td style={{ textAlign: 'right', fontWeight: 600 }}>₹{formatCurrency(item.total_item_price)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+                          <button
+                            onClick={() => setSelectedAuditOrder(order)}
+                            className="btn btn-primary"
+                            style={{ gap: '8px', fontSize: '0.8rem', padding: '8px 16px' }}
+                          >
+                            <Database size={14} /> Verify & Manage Order
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Conversion Verification & Auditing Drawer/Modal for Seller */}
+        {selectedAuditOrder && (
+          <div className="modal-overlay">
+            <div className="glass-panel modal-content animate-fade-in" style={{ maxWidth: '800px', width: '95%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                <div>
+                  <h2>Conversions & Pricing Audit Log</h2>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Verifying mathematical calculations before order verification</span>
+                </div>
+                <button onClick={() => setSelectedAuditOrder(null)} className="cart-item-delete" style={{ padding: '4px' }}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Info summary */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', background: 'var(--bg-app)', padding: '16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>AUDITED ORDER ID</span>
+                    <strong style={{ fontSize: '0.85rem' }}>{selectedAuditOrder.id}</strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>BUYER CLIENT</span>
+                    <strong style={{ fontSize: '0.85rem' }}>{selectedAuditOrder.user_name}</strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>TOTAL AMOUNT</span>
+                    <strong style={{ fontSize: '1rem', color: 'var(--primary)' }}>₹{formatCurrency(selectedAuditOrder.total_price)}</strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>STATUS</span>
+                    <span className={`badge badge-${selectedAuditOrder.status}`} style={{ marginTop: '2px' }}>{selectedAuditOrder.status}</span>
+                  </div>
+                </div>
+
+                {/* Items Breakdown list */}
+                <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                  {selectedAuditOrder.items.map((item: any) => {
+                    const basePrice = new Decimal(item.product_base_price || 0);
+                    const baseQty = new Decimal(item.base_quantity);
+                    const qtyOrdered = new Decimal(item.ordered_quantity);
+                    const unitPrice = new Decimal(item.unit_price);
+                    const totalExpectedItemPrice = baseQty.times(basePrice);
+
+                    return (
+                      <div key={item.id} style={{ borderBottom: '1px solid var(--border)', padding: '16px 0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <div>
+                            <strong style={{ fontSize: '0.95rem' }}>{item.product_name}</strong>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>SKU: {item.product_sku}</span>
+                          </div>
+                          <strong style={{ color: 'var(--text-primary)', fontSize: '1rem' }}>₹{formatCurrency(item.total_item_price)}</strong>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', background: 'var(--bg-surface-hover)', padding: '12px', borderRadius: '4px', borderLeft: '3px solid var(--primary)', fontSize: '0.8rem' }}>
+                          <div>
+                            <span style={{ color: 'var(--text-secondary)' }}>1. Unit conversion:</span>
+                            <p style={{ marginTop: '2px', fontWeight: 600 }}>
+                              {formatQuantity(qtyOrdered)} {item.ordered_unit} = {formatQuantity(baseQty)} {item.product_base_unit}
+                            </p>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-secondary)' }}>2. Rate calculation:</span>
+                            <p style={{ marginTop: '2px', fontWeight: 600 }}>
+                              ₹{formatCurrency(unitPrice)} per {item.ordered_unit}
+                            </p>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-secondary)' }}>3. Verification math:</span>
+                            <p style={{ marginTop: '2px', fontWeight: 600 }}>
+                              {formatQuantity(baseQty)} * ₹{formatCurrency(basePrice, 4)} = ₹{formatCurrency(totalExpectedItemPrice)}
+                            </p>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 600 }}>
+                              ✓ Match (Auto-verified)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Action buttons inside audit panel for the Seller */}
+                {selectedAuditOrder.status === 'pending' && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                    <button
+                      onClick={() => {
+                        handleUpdateOrderStatus(selectedAuditOrder.id, 'rejected');
+                        setSelectedAuditOrder(null);
+                      }}
+                      className="btn btn-secondary btn-danger"
+                      style={{ color: 'white', padding: '10px 18px' }}
+                    >
+                      Reject & Restore Stock
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleUpdateOrderStatus(selectedAuditOrder.id, 'approved');
+                        setSelectedAuditOrder(null);
+                      }}
+                      className="btn btn-primary"
+                      style={{ padding: '10px 18px' }}
+                    >
+                      Verify & Approve Order
+                    </button>
+                  </div>
+                )}
+
+                {selectedAuditOrder.status === 'approved' && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                    <button
+                      onClick={() => {
+                        handleUpdateOrderStatus(selectedAuditOrder.id, 'rejected');
+                        setSelectedAuditOrder(null);
+                      }}
+                      className="btn btn-secondary btn-danger"
+                      style={{ color: 'white', padding: '10px 18px' }}
+                    >
+                      Reject & Replenish Stock
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleUpdateOrderStatus(selectedAuditOrder.id, 'completed');
+                        setSelectedAuditOrder(null);
+                      }}
+                      className="btn btn-primary"
+                      style={{ padding: '10px 18px' }}
+                    >
+                      Complete & Deliver Order
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>

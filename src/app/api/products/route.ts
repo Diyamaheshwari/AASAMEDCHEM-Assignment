@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    const { sku, name, description, category, dimension, base_unit, base_price, stock_quantity } = await request.json();
+    const { sku, name, description, category, dimension, base_unit, base_price, stock_quantity, seller_id } = await request.json();
 
     if (!sku || !name || !category || !dimension || !base_unit || base_price === undefined || stock_quantity === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -72,10 +72,10 @@ export async function POST(request: Request) {
     }
 
     const insertRes = await query(
-      `INSERT INTO products (sku, name, description, category, dimension, base_unit, base_price, stock_quantity)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO products (sku, name, description, category, dimension, base_unit, base_price, stock_quantity, seller_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [sku.trim().toUpperCase(), name.trim(), description || '', category.trim(), dimension, base_unit, price.toString(), stock.toString()]
+      [sku.trim().toUpperCase(), name.trim(), description || '', category.trim(), dimension, base_unit, price.toString(), stock.toString(), seller_id || null]
     );
 
     return NextResponse.json(insertRes.rows[0], { status: 201 });

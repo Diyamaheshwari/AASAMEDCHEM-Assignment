@@ -22,7 +22,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     const { id } = await params;
-    const { sku, name, description, category, dimension, base_unit, base_price, stock_quantity } = await request.json();
+    const { sku, name, description, category, dimension, base_unit, base_price, stock_quantity, seller_id } = await request.json();
 
     if (!sku || !name || !category || !dimension || !base_unit || base_price === undefined || stock_quantity === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -52,10 +52,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const updateRes = await query(
       `UPDATE products
-       SET sku = $1, name = $2, description = $3, category = $4, dimension = $5, base_unit = $6, base_price = $7, stock_quantity = $8, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $9
+       SET sku = $1, name = $2, description = $3, category = $4, dimension = $5, base_unit = $6, base_price = $7, stock_quantity = $8, seller_id = $9, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $10
        RETURNING *`,
-      [sku.trim().toUpperCase(), name.trim(), description || '', category.trim(), dimension, base_unit, price.toString(), stock.toString(), id]
+      [sku.trim().toUpperCase(), name.trim(), description || '', category.trim(), dimension, base_unit, price.toString(), stock.toString(), seller_id || null, id]
     );
 
     return NextResponse.json(updateRes.rows[0]);

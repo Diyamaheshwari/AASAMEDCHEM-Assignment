@@ -34,8 +34,20 @@ export async function GET() {
         JOIN users u ON o.user_id = u.id
         ORDER BY o.created_at DESC
       `;
+    } else if (session.role === 'seller') {
+      // Seller query: Fetch incoming orders containing products managed by this seller
+      ordersQuery = `
+        SELECT DISTINCT o.*, u.name as user_name, u.email as user_email
+        FROM orders o
+        JOIN users u ON o.user_id = u.id
+        JOIN order_items oi ON o.id = oi.order_id
+        JOIN products p ON oi.product_id = p.id
+        WHERE p.seller_id = $1
+        ORDER BY o.created_at DESC
+      `;
+      queryParams = [session.userId];
     } else {
-      // Seller query: Fetch user's own orders
+      // Buyer query: Fetch orders placed by this buyer
       ordersQuery = `
         SELECT o.*, u.name as user_name, u.email as user_email
         FROM orders o

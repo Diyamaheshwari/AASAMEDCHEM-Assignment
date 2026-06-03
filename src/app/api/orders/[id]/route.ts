@@ -14,15 +14,30 @@ async function getSession() {
   return verifyJWT(token, JWT_SECRET);
 }
 
-// PUT: Update order status (Admin only)
+// PUT: Update order status (Seller only)
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
-    if (!session || session.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    if (!session || session.role !== 'seller') {
+      return NextResponse.json({ error: 'Forbidden: Only sellers can verify or update order statuses' }, { status: 403 });
     }
 
     const { id } = await params;
+
+    // Verify that the logged-in seller is responsible for at least one product in this order
+    const sellerCheck = await query(
+      `SELECT DISTINCT p.seller_id 
+       FROM order_items oi
+       JOIN products p ON oi.product_id = p.id
+       WHERE oi.order_id = $1`,
+      [id]
+    );
+
+    const isResponsible = sellerCheck.rows.some((row: any) => row.seller_id === session.userId);
+    if (!isResponsible) {
+      return NextResponse.json({ error: 'Forbidden: You can only update orders containing your products' }, { status: 403 });
+    }
+
     const { status } = await request.json(); // 'pending', 'approved', 'rejected', 'completed'
 
     const validStatuses = ['pending', 'approved', 'rejected', 'completed'];
@@ -140,7 +155,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         createNotification({
           userId: order.user_id,
           title: `Quotation ${statusLabel}`,
-          message: `Your quotation #${id.substring(0, 8)}... of total ₹${parseFloat(order.total_price).toFixed(2)} has been ${status.toLowerCase()} by the Admin.`,
+          message: `Your quotation #${id.substring(0, 8)}... of total ₹${parseFloat(order.total_price).toFixed(2)} has been ${status.toLowerCase()} by Seller ${session.name}.`,
           type: 'order_status',
           link: '/seller?tab=history'
         }).catch(err => console.error('Notification error on status change:', err));

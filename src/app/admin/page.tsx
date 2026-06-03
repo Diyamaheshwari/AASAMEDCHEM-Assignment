@@ -26,6 +26,7 @@ interface Product {
   base_unit: 'g' | 'mL' | 'items';
   base_price: string;
   stock_quantity: string;
+  seller_id?: string;
 }
 
 interface OrderItem {
@@ -77,6 +78,7 @@ export default function AdminDashboard() {
   const [baseUnit, setBaseUnit] = useState<'g' | 'mL' | 'items'>('g');
   const [basePrice, setBasePrice] = useState('');
   const [stockQuantity, setStockQuantity] = useState('');
+  const [sellerId, setSellerId] = useState('');
   const [formError, setFormError] = useState('');
 
   // Orders State
@@ -312,6 +314,7 @@ export default function AdminDashboard() {
     setBaseUnit('g');
     setBasePrice('');
     setStockQuantity('');
+    setSellerId('');
     setFormError('');
     setShowProductModal(true);
   };
@@ -327,6 +330,7 @@ export default function AdminDashboard() {
     setBaseUnit(p.base_unit);
     setBasePrice(new Decimal(p.base_price).toString());
     setStockQuantity(new Decimal(p.stock_quantity).toString());
+    setSellerId(p.seller_id || '');
     setFormError('');
     setShowProductModal(true);
   };
@@ -350,6 +354,7 @@ export default function AdminDashboard() {
       base_unit: baseUnit,
       base_price: parseFloat(basePrice),
       stock_quantity: parseFloat(stockQuantity),
+      seller_id: sellerId || null,
     };
 
     const endpoint = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
@@ -572,7 +577,8 @@ export default function AdminDashboard() {
         borderBottom: '1px solid var(--border)',
         background: 'var(--glass-bg)',
         backdropFilter: 'blur(16px)',
-        marginBottom: '24px'
+        marginBottom: '24px',
+        overflow: 'visible'
       }}>
         {/* Left: Brand Logo & Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1496,6 +1502,21 @@ export default function AdminDashboard() {
                 />
               </div>
 
+              {/* Responsible Seller Selector */}
+              <div className="form-group">
+                <label className="form-label">Responsible Seller / Owner</label>
+                <select
+                  value={sellerId}
+                  onChange={(e) => setSellerId(e.target.value)}
+                  className="form-control"
+                >
+                  <option value="">-- No Seller Assigned --</option>
+                  {usersList.filter((u: any) => u.role === 'seller').map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
+                  ))}
+                </select>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="form-group">
                   <label className="form-label">Dimension</label>
@@ -1660,56 +1681,15 @@ export default function AdminDashboard() {
                 })}
               </div>
 
-              {/* Action buttons inside audit panel */}
-              {selectedAuditOrder.status === 'pending' && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                  <button
-                    onClick={() => {
-                      handleUpdateOrderStatus(selectedAuditOrder.id, 'rejected');
-                      setSelectedAuditOrder(null);
-                    }}
-                    className="btn btn-secondary btn-danger"
-                    style={{ color: 'white', padding: '10px 18px' }}
-                  >
-                    Reject & Restore Stock
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleUpdateOrderStatus(selectedAuditOrder.id, 'approved');
-                      setSelectedAuditOrder(null);
-                    }}
-                    className="btn btn-primary"
-                    style={{ padding: '10px 18px' }}
-                  >
-                    Approve Quotation
-                  </button>
-                </div>
-              )}
-
-              {selectedAuditOrder.status === 'approved' && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                  <button
-                    onClick={() => {
-                      handleUpdateOrderStatus(selectedAuditOrder.id, 'rejected');
-                      setSelectedAuditOrder(null);
-                    }}
-                    className="btn btn-secondary btn-danger"
-                    style={{ color: 'white', padding: '10px 18px' }}
-                  >
-                    Reject & Replenish Stock
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleUpdateOrderStatus(selectedAuditOrder.id, 'completed');
-                      setSelectedAuditOrder(null);
-                    }}
-                    className="btn btn-primary"
-                    style={{ padding: '10px 18px' }}
-                  >
-                    Complete / Deliver Order
-                  </button>
-                </div>
-              )}
+              {/* Action buttons inside audit panel (monitored read-only for admin) */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border)', paddingTop: '16px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertCircle size={14} style={{ color: 'var(--warning)' }} /> Managed and approved only by the assigned product Seller.
+                </span>
+                <button type="button" onClick={() => setSelectedAuditOrder(null)} className="btn btn-secondary" style={{ padding: '8px 16px' }}>
+                  Close Audit
+                </button>
+              </div>
             </div>
           </div>
         </div>
