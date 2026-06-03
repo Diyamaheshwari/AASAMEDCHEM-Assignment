@@ -809,32 +809,7 @@ export default function SellerDashboard() {
           gap: 6px;
         }
 
-        .nav-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 16px;
-          background: transparent;
-          border: none;
-          color: var(--text-secondary);
-          font-family: var(--font-display);
-          font-weight: 600;
-          font-size: 0.9rem;
-          border-radius: var(--radius-sm);
-          cursor: pointer;
-          width: 100%;
-          text-align: left;
-          transition: all 0.2s ease;
-          position: relative;
-        }
-        .nav-item:hover {
-          background: var(--bg-surface-hover);
-          color: var(--text-primary);
-        }
-        .nav-item.active {
-          background: var(--primary-glow);
-          color: var(--primary);
-        }
+
 
         .nav-arrow {
           position: absolute;
