@@ -23,8 +23,7 @@ export default function RootLayout({
               (function() {
                 try {
                   const saved = localStorage.getItem('theme');
-                  const system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                  const theme = saved || system;
+                  const theme = saved || 'light';
                   document.documentElement.setAttribute('data-theme', theme);
                 } catch (e) {
                   console.error('Theme initialization failed:', e);
